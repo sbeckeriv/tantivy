@@ -6,33 +6,35 @@ pub use self::writer::BytesFastFieldWriter;
 
 #[cfg(test)]
 mod tests {
-    use crate::schema::{BytesOptions, Schema, Value};
-    use crate::{DocAddress, Index, Searcher};
+    use crate::query::TermQuery;
+    use crate::schema::{BytesOptions, IndexRecordOption, Schema, Value};
+    use crate::{DocAddress, DocSet, Index, Searcher, Term};
     use std::ops::Deref;
 
     #[test]
-    fn test_bytes() {
+    fn test_bytes() -> crate::Result<()> {
         let mut schema_builder = Schema::builder();
-        let field = schema_builder.add_bytes_field("bytesfield", BytesOptions::default());
+        let field =
+            schema_builder.add_bytes_field("bytesfield", BytesOptions::default().set_fast());
         let schema = schema_builder.build();
         let index = Index::create_in_ram(schema);
-        let mut index_writer = index.writer_for_tests().unwrap();
+        let mut index_writer = index.writer_for_tests()?;
         index_writer.add_document(doc!(field=>vec![0u8, 1, 2, 3]));
         index_writer.add_document(doc!(field=>vec![]));
         index_writer.add_document(doc!(field=>vec![255u8]));
         index_writer.add_document(doc!(field=>vec![1u8, 3, 5, 7, 9]));
         index_writer.add_document(doc!(field=>vec![0u8; 1000]));
-        assert!(index_writer.commit().is_ok());
-        let searcher = index.reader().unwrap().searcher();
+        index_writer.commit()?;
+        let searcher = index.reader()?.searcher();
         let segment_reader = searcher.segment_reader(0);
         let bytes_reader = segment_reader.fast_fields().bytes(field).unwrap();
-
         assert_eq!(bytes_reader.get_bytes(0), &[0u8, 1, 2, 3]);
         assert!(bytes_reader.get_bytes(1).is_empty());
         assert_eq!(bytes_reader.get_bytes(2), &[255u8]);
         assert_eq!(bytes_reader.get_bytes(3), &[1u8, 3, 5, 7, 9]);
         let long = vec![0u8; 1000];
         assert_eq!(bytes_reader.get_bytes(4), long.as_slice());
+        Ok(())
     }
 
     fn create_index_for_test(
@@ -57,7 +59,7 @@ mod tests {
         assert_eq!(searcher.num_docs(), 1);
         let retrieved_doc = searcher.doc(DocAddress(0u32, 0u32))?;
         let field = searcher.schema().get_field("string_bytes").unwrap();
-        let values = retrieved_doc.get_all(field);
+        let values: Vec<&Value> = retrieved_doc.get_all(field).collect();
         assert_eq!(values.len(), 2);
         let values_bytes: Vec<&[u8]> = values
             .into_iter()
@@ -79,8 +81,47 @@ mod tests {
         assert_eq!(searcher.num_docs(), 1);
         let retrieved_doc = searcher.doc(DocAddress(0u32, 0u32))?;
         let field = searcher.schema().get_field("string_bytes").unwrap();
-        let values = retrieved_doc.get_all(field);
-        assert!(values.is_empty());
+        assert!(retrieved_doc.get_first(field).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_bytes() -> crate::Result<()> {
+        let searcher = create_index_for_test(BytesOptions::default().set_indexed())?;
+        assert_eq!(searcher.num_docs(), 1);
+        let field = searcher.schema().get_field("string_bytes").unwrap();
+        let term = Term::from_field_bytes(field, b"lucene".as_ref());
+        let term_query = TermQuery::new(term, IndexRecordOption::Basic);
+        let term_weight = term_query.specialized_weight(&searcher, true);
+        let term_scorer = term_weight.specialized_scorer(searcher.segment_reader(0), 1.0f32)?;
+        assert_eq!(term_scorer.doc(), 0u32);
+        Ok(())
+    }
+
+    #[test]
+    fn test_non_index_bytes() -> crate::Result<()> {
+        let searcher = create_index_for_test(BytesOptions::default())?;
+        assert_eq!(searcher.num_docs(), 1);
+        let field = searcher.schema().get_field("string_bytes").unwrap();
+        let term = Term::from_field_bytes(field, b"lucene".as_ref());
+        let term_query = TermQuery::new(term, IndexRecordOption::Basic);
+        let term_weight = term_query.specialized_weight(&searcher, false);
+        let term_scorer_err = term_weight.specialized_scorer(searcher.segment_reader(0), 1.0f32);
+        assert!(matches!(
+            term_scorer_err,
+            Err(crate::TantivyError::SchemaError(_))
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_fast_bytes_multivalue_value() -> crate::Result<()> {
+        let searcher = create_index_for_test(BytesOptions::default().set_fast())?;
+        assert_eq!(searcher.num_docs(), 1);
+        let fast_fields = searcher.segment_reader(0u32).fast_fields();
+        let field = searcher.schema().get_field("string_bytes").unwrap();
+        let fast_field_reader = fast_fields.bytes(field).unwrap();
+        assert_eq!(fast_field_reader.get_bytes(0u32), b"tantivy");
         Ok(())
     }
 }

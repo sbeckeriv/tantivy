@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::ops::BitOr;
 
+// TODO(pmasurel) document that if multivalued, we only retain the first one.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BytesOptions {
     indexed: bool,
@@ -42,6 +44,19 @@ impl Default for BytesOptions {
             indexed: false,
             fast: false,
             stored: false,
+        }
+    }
+}
+
+impl<T: Into<BytesOptions>> BitOr<T> for BytesOptions {
+    type Output = BytesOptions;
+
+    fn bitor(self, other: T) -> BytesOptions {
+        let other = other.into();
+        BytesOptions {
+            indexed: self.indexed | other.indexed,
+            stored: self.stored | other.stored,
+            fast: self.fast | other.fast,
         }
     }
 }

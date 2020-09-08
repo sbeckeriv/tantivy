@@ -1,5 +1,6 @@
 use base64::decode;
 
+use crate::schema::bytes_options::BytesOptions;
 use crate::schema::Facet;
 use crate::schema::IndexRecordOption;
 use crate::schema::TextFieldIndexing;
@@ -8,7 +9,6 @@ use crate::schema::{IntOptions, TextOptions};
 use crate::tokenizer::PreTokenizedString;
 use chrono::{FixedOffset, Utc};
 use serde_json::Value as JsonValue;
-use crate::schema::bytes_options::BytesOptions;
 
 /// Possible error that may occur while parsing a field value
 /// At this point the JSON is known to be valid.
@@ -120,7 +120,7 @@ impl FieldType {
                 } else {
                     None
                 }
-            },
+            }
         }
     }
 
@@ -220,11 +220,11 @@ impl FieldType {
 #[cfg(test)]
 mod tests {
     use super::FieldType;
+    use crate::schema::bytes_options::BytesOptions;
     use crate::schema::field_type::ValueParsingError;
     use crate::schema::TextOptions;
     use crate::schema::Value;
     use crate::schema::{Schema, INDEXED};
-    use crate::schema::bytes_options::BytesOptions;
     use crate::tokenizer::{PreTokenizedString, Token};
     use crate::{DateTime, Document};
     use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Utc};

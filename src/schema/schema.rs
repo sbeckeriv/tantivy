@@ -4,12 +4,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::*;
+use crate::schema::bytes_options::BytesOptions;
 use serde::de::{SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{self, Map as JsonObject, Value as JsonValue};
 use std::fmt;
-use crate::schema::bytes_options::BytesOptions;
 
 /// Tantivy has a very strict schema.
 /// You need to specify in advance whether a field is indexed or not,
@@ -164,7 +164,7 @@ impl SchemaBuilder {
     pub fn add_bytes_field<T: Into<BytesOptions>>(
         &mut self,
         field_name: &str,
-        field_options: T
+        field_options: T,
     ) -> Field {
         let field_entry = FieldEntry::new_bytes(field_name.to_string(), field_options.into());
         self.add_field(field_entry)
@@ -564,14 +564,14 @@ mod tests {
             .convert_named_doc(NamedFieldDocument(named_doc_map))
             .unwrap();
         assert_eq!(
-            doc.get_all(title),
+            doc.get_all(title).collect::<Vec<_>>(),
             vec![
                 &Value::from("title1".to_string()),
                 &Value::from("title2".to_string())
             ]
         );
         assert_eq!(
-            doc.get_all(val),
+            doc.get_all(val).collect::<Vec<_>>(),
             vec![&Value::from(14u64), &Value::from(-1i64)]
         );
     }

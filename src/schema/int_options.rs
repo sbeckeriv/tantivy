@@ -127,12 +127,12 @@ impl<T: Into<IntOptions>> BitOr<T> for IntOptions {
     type Output = IntOptions;
 
     fn bitor(self, other: T) -> IntOptions {
-        let mut res = IntOptions::default();
         let other = other.into();
-        res.indexed = self.indexed | other.indexed;
-        res.stored = self.stored | other.stored;
-        res.fast = self.fast.or(other.fast);
-        res
+        IntOptions {
+            indexed: self.indexed | other.indexed,
+            stored: self.stored | other.stored,
+            fast: self.fast.or(other.fast),
+        }
     }
 }
 
